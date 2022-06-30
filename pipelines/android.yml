@@ -55,48 +55,6 @@ jobs:
           yarn install
         displayName: "Install modules"
 
-      # Print Java Version
-      - task: CmdLine@2
-        displayName: Print Java version
-        inputs:
-          script: java -version
-      - powershell: |
-          $rev=$env:BUILD_BUILDNUMBER
-          $version = "$(MajorVersion).$(MinorVersion).$(PatchVersion)"
-
-          $NewAndroidVersionCode = $(AndroidVersionCode)+1
-          Write-Host "Current Android Version Code is $(AndroidVersionCode)"
-          Write-Host "Next Android Version Code is $NewAndroidVersionCode"
-          # Write-Host $(PAT)
-
-          # $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f "","$(PAT)")))
-          # Write-Host $base64AuthInfo
-          # Write-Host $(API)
-          # $json = '{"id":2,"type":"Vsts","name":"Mobile","variables":{"AndroidVersionCode":{"isSecret":false,"value":"' + $NewAndroidVersionCode + '"},"PAT":{"isSecret":true,"value":"$(PAT)"},"API":{"isSecret":false,"value":"$(API)"}}}'
-          # Write-Host $json
-          # $pipeline = Invoke-RestMethod -Uri $(API) -Method Put -Body $json -ContentType "application/json" -Headers @{Authorization=("Basic {0}" -f $base64AuthInfo)}
-          # Write-Host "New Variable Value:" $pipeline.variables.AndroidVersionCode.value
-
-
-          $build_number = "$version.$NewAndroidVersionCode"
-
-          $final_build_number=$build_number 
-          If ($final_build_number.StartsWith("v")) {
-              $final_build_number=$final_build_number.Substring(1)
-          }
-
-          Write-Host "Setting Build Number to $env:BUILD_DEFINITIONNAME_$final_build_number"
-          Write-Host("##vso[build.updatebuildnumber]$env:BUILD_DEFINITIONNAME_" + $final_build_number)
-
-          Write-Host "Setting version code"
-          Write-Host("##vso[task.setvariable variable=versionCode;]$NewAndroidVersionCode")
-          Write-Host "Version Code: $env:versionCode"
-
-          Write-Host "Setting bundle version string"
-          Write-Host("##vso[task.setvariable variable=versionName;]$version")
-          Write-Host "Bundle version string: $(versionName)"
-        displayName: Set Build Version and Code
-
         # Generate AABs and APKs
       - task: Gradle@2
         displayName: "Generate AABs and APKs"
