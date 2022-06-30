@@ -1,123 +1,63 @@
+# https://techcommunity.microsoft.com/t5/windows-dev-appconsult/using-azure-devops-to-create-a-ci-cd-pipeline-for-an-android/ba-p/1094422
+# Based on: https://github.com/staff0rd/react-native-pipeline/blob/master/azure-pipelines-android.yml
+
+variables:
+  YARN_CACHE_FOLDER: $(Pipeline.Workspace)/.yarn
+
 trigger:
-  # Pipeline will run for any update pushed to the below listed branches
-  # https://docs.microsoft.com/en-us/azure/devops/pipelines/repos/github?view=azure-devops&tabs=yaml#ci-triggers
-  branches:
-    include:
-      - dev
-      - main
-  paths:
-    exclude:
-      - ios
-      - pipelines/build-ios.yml
-      - .editorconfig
-      - .gitattributes
-      - .gitignore
-      - .eslintrc.json
-      - README.md
-
-# Pipeline will run for PRs targeting the below listed branches
-# https://docs.microsoft.com/en-us/azure/devops/pipelines/repos/github?view=azure-devops&tabs=yaml#pr-triggers
-pr:
-  branches:
-    include:
-      - dev
-      - hotfix/*
-      - release/*
-  paths:
-    exclude:
-      - ios
-      - pipelines/build-ios.yml
-      - .editorconfig
-      - .gitattributes
-      - .gitignore
-      - .eslintrc.json
-      - README.md
-
+  - main
 
 jobs:
-  - job: Phase_1
-    displayName: Build Android
-    timeoutInMinutes: 45
-    cancelTimeoutInMinutes: 1
-    pool:
-      vmImage: ubuntu-latest
-    steps:
-      # Checkout
-      - checkout: self
+- job: Build_Android
+  pool:
+    vmImage: 'ubuntu-20.04'
+  steps:
+  - task: NodeTool@0
+    displayName: 'Install Node'
+    inputs:
+      versionSpec: '16.13.2'
+  - task: Cache@2
+    inputs:
+      key: 'yarn | "$(Agent.OS)" | yarn.lock'
+      restoreKeys: |
+        yarn | "$(Agent.OS)"
+      path: $(YARN_CACHE_FOLDER)
+    displayName: Cache Yarn packages
+  - script: yarn install --frozen-lockfile
+  - task: Gradle@2
+    inputs:
+      workingDirectory: 'android'
+      gradleWrapperFile: 'android/gradlew'
+      gradleOptions: '-Xmx3072m'
+      tasks: 'bundleRelease assembleRelease'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: android/app/build/outputs/apk/release/app-release.apk
+      artifactName: drop
+      publishLocation: 'container'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: android/app/build/outputs/bundle/release/app-release.aab
+      artifactName: drop
+      publishLocation: 'container'
 
-      # NodeTool@16
-      - task: NodeTool@0
-        displayName: "Use Node 16.x"
-        inputs:
-          versionSpec: '16.x'
-      
-      - script: |
-          yarn install
-        displayName: "Install modules"
 
-      - task: JavaToolInstaller@0
-        inputs:
-          versionSpec: '11'
-          jdkArchitectureOption: 'x64'
-          jdkSourceOption: 'PreInstalled'
-          cleanDestinationDirectory: true
-      
-      # Print Java Version
-      - task: CmdLine@2
-        displayName: Print Java version
-        inputs:
-          script: java -version
-          
-      # Generate AABs and APKs
-      - task: Gradle@2
-        displayName: "Generate AABs and APKs"
-        inputs:
-          gradleWrapperFile: android/gradlew
-          workingDirectory: android
-          tasks: "bundle assemble"
-          publishJUnitResults: false
-          javaHomeOption: "JDKVersion"
-          jdkVersionOption: "1.8"
-          gradleOptions: "-Xmx3072m"
-          sonarQubeRunAnalysis: false
-          testResultsFiles: "**/build/test-results/TEST-*.xml"
-        # Copy Lint Files
-      - task: CopyFiles@2
-        displayName: Copy Lint Files
-        condition: succeededOrFailed()
-        inputs:
-          SourceFolder: $(build.sourcesdirectory)
-          Contents: "**/lint-results.*"
-          TargetFolder: $(build.artifactstagingdirectory)
-          flattenFolders: true
 
-      # Copy Generated AABs and APKs
-      - task: CopyFiles@2
-        displayName: "Copy Generated AABs and APKs to Artifacts"
-        inputs:
-          sourceFolder: "$(build.sourcesdirectory)"
-          contents: |
-            **/app-debug.aab
-            **/app-release.aab
-            **/app-debug.apk
-            **/app-release-unsigned.apk
-          targetFolder: "$(build.artifactstagingdirectory)"
-          flattenFolders: true
-
-      # Rename Generated AABs and APKs
-      - task: Bash@3
-        displayName: "Rename Generated AABs and APKs"
-        inputs:
-          workingDirectory: "$(build.artifactstagingdirectory)"
-          targetType: "inline"
-          script: |
-            mv app-debug.aab hc-ministry-debug.aab
-            mv app-release.aab hc-ministry-release-unsigned.aab
-            mv app-debug.apk hc-ministry-debug.apk
-            mv app-release-unsigned.apk hc-ministry-release-unsigned.apk
-      
-      - task: PublishBuildArtifacts@1
-        displayName: 'Publish Artifact: drop'
-        condition: succeededOrFailed()
-        inputs:
-          PathtoPublish: $(build.artifactstagingdirectory)
+- job: Build_iOS
+  pool:
+    vmImage: 'macOS-11'
+  steps:
+  - task: NodeTool@0
+    displayName: 'Install Node'
+    inputs:
+      versionSpec: '16.13.2'
+  - task: Cache@2
+    inputs:
+      key: 'yarn | "$(Agent.OS)" | yarn.lock'
+      restoreKeys: |
+        yarn | "$(Agent.OS)"
+      path: $(YARN_CACHE_FOLDER)
+    displayName: Cache Yarn packages
+  - script: yarn install --frozen-lockfile
+  - script: cd ios && pod install
+  - script: cd ios && xcodebuild clean archive -workspace testCiCdReactNative.xcworkspace -scheme testCiCdReactNative -archivePath testCiCdReactNative.xcarchive CODE_SIGNING_ALLOWED=NO | xcpretty
