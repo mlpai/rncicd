@@ -8,38 +8,38 @@ trigger:
   - main
 
 jobs:
-- job: Build_Android
-  pool:
-    vmImage: 'ubuntu-20.04'
-  steps:
-  - task: NodeTool@0
-    displayName: 'Install Node'
-    inputs:
-      versionSpec: '16.13.2'
-  - task: Cache@2
-    inputs:
-      key: 'yarn | "$(Agent.OS)" | yarn.lock'
-      restoreKeys: |
-        yarn | "$(Agent.OS)"
-      path: $(YARN_CACHE_FOLDER)
-    displayName: Cache Yarn packages
-  - script: yarn install --frozen-lockfile
-  - task: Gradle@2
-    inputs:
-      workingDirectory: 'android'
-      gradleWrapperFile: 'android/gradlew'
-      gradleOptions: '-Xmx3072m'
-      tasks: 'bundleRelease assembleRelease'
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: android/app/build/outputs/apk/release/app-release.apk
-      artifactName: drop
-      publishLocation: 'container'
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: android/app/build/outputs/bundle/release/app-release.aab
-      artifactName: drop
-      publishLocation: 'container'
+# - job: Build_Android
+#   pool:
+#     vmImage: 'ubuntu-20.04'
+#   steps:
+#   - task: NodeTool@0
+#     displayName: 'Install Node'
+#     inputs:
+#       versionSpec: '16.13.2'
+#   - task: Cache@2
+#     inputs:
+#       key: 'yarn | "$(Agent.OS)" | yarn.lock'
+#       restoreKeys: |
+#         yarn | "$(Agent.OS)"
+#       path: $(YARN_CACHE_FOLDER)
+#     displayName: Cache Yarn packages
+#   - script: yarn install --frozen-lockfile
+#   - task: Gradle@2
+#     inputs:
+#       workingDirectory: 'android'
+#       gradleWrapperFile: 'android/gradlew'
+#       gradleOptions: '-Xmx3072m'
+#       tasks: 'bundleRelease assembleRelease'
+#   - task: PublishBuildArtifacts@1
+#     inputs:
+#       pathtoPublish: android/app/build/outputs/apk/release/app-release.apk
+#       artifactName: drop
+#       publishLocation: 'container'
+#   - task: PublishBuildArtifacts@1
+#     inputs:
+#       pathtoPublish: android/app/build/outputs/bundle/release/app-release.aab
+#       artifactName: drop
+#       publishLocation: 'container'
 
 
 
@@ -60,4 +60,30 @@ jobs:
     displayName: Cache Yarn packages
   - script: yarn install --frozen-lockfile
   - script: cd ios && pod install
-  - script: cd ios && xcodebuild clean archive -workspace Anime.xcworkspace -scheme Anime -archivePath Anime.xcarchive CODE_SIGNING_ALLOWED=NO | xcpretty
+
+  - task: Xcode@5
+    displayName: 'Build IPA'
+    inputs:
+      actions: 'build'
+      configuration: 'Release'
+      sdk: 'iphoneos'
+      xcWorkspacePath: 'ios/Anime.xcworkspace'
+      scheme: 'Anime'
+      packageApp: true
+      exportPath: 'output'
+    
+  - task: CopyFiles@2
+    displayName: 'Copy IPA'
+    inputs:
+      contents: '**/*.ipa'
+      targetFolder: '$(build.artifactStagingDirectory)'
+      overWrite: true
+      flattenFolders: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish IPA to artifacts'
+    inputs:
+      PathtoPublish: '$(build.artifactStagingDirectory)'
+      ArtifactName: 'ios'
+      publishLocation: 'Container'
+  # - script: cd ios && xcodebuild clean archive -workspace Anime.xcworkspace -scheme Anime -archivePath Anime.xcarchive CODE_SIGNING_ALLOWED=NO | xcpretty
