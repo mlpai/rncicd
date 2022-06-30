@@ -60,7 +60,15 @@ jobs:
           versionSpec: '11'
           jdkArchitectureOption: 'x64'
           jdkSourceOption: 'PreInstalled'
-        # Generate AABs and APKs
+          cleanDestinationDirectory: true
+      
+      # Print Java Version
+      - task: CmdLine@2
+        displayName: Print Java version
+        inputs:
+          script: java -version
+          
+      # Generate AABs and APKs
       - task: Gradle@2
         displayName: "Generate AABs and APKs"
         inputs:
