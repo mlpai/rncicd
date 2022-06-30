@@ -33,12 +33,6 @@ pr:
       - .eslintrc.json
       - README.md
 
-variables:
-  - name: envFileName
-    ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-      value: .env.prod
-    ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
-      value: .env.dev
 
 jobs:
   - job: Phase_1
@@ -51,177 +45,18 @@ jobs:
       # Checkout
       - checkout: self
 
-      # Use Node 16.x
-      - template: templates/common/use-node.yml
-        parameters:
-          version: 16.x
-
-      # Install Packages
-      - template: templates/common/install-packages.yml
-
-      # Run Lint and Unit Tests
-      # - template: templates/common/run-tests-lint.yml
-
-      # Publish Code Coverage
-      # - template: templates/common/publish-code-coverage.yml
+      # NodeTool@16
+      - task: NodeTool@0
+        displayName: "Use Node 16.x"
+        inputs:
+          versionSpec: '16.x'
+      
+      - script: |
+          yarn install
+        displayName: "Install modules"
 
       # Print Java Version
       - task: CmdLine@2
         displayName: Print Java version
         inputs:
           script: java -version
-
-      # Set Build Version and Code
-      - powershell: |
-          $rev=$env:BUILD_BUILDNUMBER
-          $version = "$(MajorVersion).$(MinorVersion).$(PatchVersion)"
-
-          $NewAndroidVersionCode = $(AndroidVersionCode)+1
-          Write-Host "Current Android Version Code is $(AndroidVersionCode)"
-          Write-Host "Next Android Version Code is $NewAndroidVersionCode"
-          # Write-Host $(PAT)
-
-          # $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f "","$(PAT)")))
-          # Write-Host $base64AuthInfo
-          # Write-Host $(API)
-          # $json = '{"id":2,"type":"Vsts","name":"Mobile","variables":{"AndroidVersionCode":{"isSecret":false,"value":"' + $NewAndroidVersionCode + '"},"PAT":{"isSecret":true,"value":"$(PAT)"},"API":{"isSecret":false,"value":"$(API)"}}}'
-          # Write-Host $json
-          # $pipeline = Invoke-RestMethod -Uri $(API) -Method Put -Body $json -ContentType "application/json" -Headers @{Authorization=("Basic {0}" -f $base64AuthInfo)}
-          # Write-Host "New Variable Value:" $pipeline.variables.AndroidVersionCode.value
-
-
-          $build_number = "$version.$NewAndroidVersionCode"
-
-          $final_build_number=$build_number 
-          If ($final_build_number.StartsWith("v")) {
-              $final_build_number=$final_build_number.Substring(1)
-          }
-
-          Write-Host "Setting Build Number to $env:BUILD_DEFINITIONNAME_$final_build_number"
-          Write-Host("##vso[build.updatebuildnumber]$env:BUILD_DEFINITIONNAME_" + $final_build_number)
-
-          Write-Host "Setting version code"
-          Write-Host("##vso[task.setvariable variable=versionCode;]$NewAndroidVersionCode")
-          Write-Host "Version Code: $env:versionCode"
-
-          Write-Host "Setting bundle version string"
-          Write-Host("##vso[task.setvariable variable=versionName;]$version")
-          Write-Host "Bundle version string: $(versionName)"
-        displayName: Set Build Version and Code
-
-      # Copy Environment Variables
-      - template: templates/common/create-env-file.yml
-        parameters:
-          envFileName: $(envFileName)
-
-      # Generate AABs and APKs
-      - task: Gradle@2
-        displayName: "Generate AABs and APKs"
-        inputs:
-          gradleWrapperFile: android/gradlew
-          workingDirectory: android
-          tasks: "bundle assemble"
-          publishJUnitResults: false
-          javaHomeOption: "JDKVersion"
-          jdkVersionOption: "1.8"
-          gradleOptions: "-Xmx3072m"
-          sonarQubeRunAnalysis: false
-          testResultsFiles: "**/build/test-results/TEST-*.xml"
-
-      # Copy Lint Files
-      - task: CopyFiles@2
-        displayName: Copy Lint Files
-        condition: succeededOrFailed()
-        inputs:
-          SourceFolder: $(build.sourcesdirectory)
-          Contents: "**/lint-results.*"
-          TargetFolder: $(build.artifactstagingdirectory)
-          flattenFolders: true
-
-      # Copy Generated AABs and APKs
-      - task: CopyFiles@2
-        displayName: "Copy Generated AABs and APKs to Artifacts"
-        inputs:
-          sourceFolder: "$(build.sourcesdirectory)"
-          contents: |
-            **/app-debug.aab
-            **/app-release.aab
-            **/app-debug.apk
-            **/app-release-unsigned.apk
-          targetFolder: "$(build.artifactstagingdirectory)"
-          flattenFolders: true
-
-      # Rename Generated AABs and APKs
-      - task: Bash@3
-        displayName: "Rename Generated AABs and APKs"
-        inputs:
-          workingDirectory: "$(build.artifactstagingdirectory)"
-          targetType: "inline"
-          script: |
-            mv app-debug.aab hc-small-group-debug.aab
-            mv app-release.aab hc-small-group-release-unsigned.aab
-            mv app-debug.apk hc-small-group-debug.apk
-            mv app-release-unsigned.apk hc-small-group-release-unsigned.apk
-
-      # Sign and Align AAB
-      - task: AndroidSigning@2
-        displayName: "Sign and Align Release AAB"
-        inputs:
-          apkFiles: "**/outputs/bundle/**/app-release.aab"
-          jarsign: true
-          jarsignerKeystoreFile: "2110538d-11a9-4701-b063-27cd6e58068d"
-          jarsignerKeystorePassword: "$(SmallGroupAppAndroidKeyStorePassword)"
-          jarsignerKeystoreAlias: "$(SmallGroupAppAndroidKeyAlias)"
-          jarsignerKeyPassword: "$(SmallGroupAppAndroidKeyPassword)"
-          jarsignerArguments: "-sigalg SHA256withRSA -digestalg SHA-256"
-          zipalign: true
-
-      # Copy Signed AAB
-      - task: CopyFiles@2
-        displayName: "Copy Signed AAB to Artifacts"
-        inputs:
-          sourceFolder: "$(build.sourcesdirectory)"
-          contents: "**/app-release.aab"
-          targetFolder: "$(build.artifactstagingdirectory)"
-          flattenFolders: true
-
-      # Renamed Signed AABs
-      - task: Bash@3
-        displayName: "Rename Signed AAB"
-        inputs:
-          workingDirectory: "$(build.artifactstagingdirectory)"
-          targetType: "inline"
-          script: |
-            mv app-release.aab hc-small-group-release.aab
-
-      # Sign and Align Release APK
-      - task: AndroidSigning@3
-        displayName: "Sign and Align Release APK"
-        inputs:
-          apkFiles: "**/outputs/apk/**/app-release-unsigned.apk"
-          apksignerKeystoreFile: "2110538d-11a9-4701-b063-27cd6e58068d"
-          apksignerKeystorePassword: "$(SmallGroupAppAndroidKeyStorePassword)"
-          apksignerKeystoreAlias: "$(SmallGroupAppAndroidKeyAlias)"
-          apksignerKeyPassword: "$(SmallGroupAppAndroidKeyPassword)"
-          zipalign: true
-
-      # Copy Signed APK
-      - task: CopyFiles@2
-        displayName: "Copy Signed APK to Artifacts"
-        inputs:
-          sourceFolder: "$(build.sourcesdirectory)"
-          contents: "**/app-release-unsigned.apk"
-          targetFolder: "$(build.artifactstagingdirectory)"
-          flattenFolders: true
-
-      # Renamed Signed APK
-      - task: Bash@3
-        displayName: "Rename Signed APK"
-        inputs:
-          workingDirectory: "$(build.artifactstagingdirectory)"
-          targetType: "inline"
-          script: |
-            mv app-release-unsigned.apk hc-small-group-release.apk
-
-      # Publish Artifacts
-      - template: templates/common/publish-artifacts.yml
