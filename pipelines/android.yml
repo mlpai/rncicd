@@ -55,6 +55,11 @@ jobs:
           yarn install
         displayName: "Install modules"
 
+      - task: JavaToolInstaller@0
+        inputs:
+          versionSpec: '11'
+          jdkArchitectureOption: 'x64'
+          jdkSourceOption: 'PreInstalled'
         # Generate AABs and APKs
       - task: Gradle@2
         displayName: "Generate AABs and APKs"
