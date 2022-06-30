@@ -1,0 +1,12 @@
+# Use Node $(Version)
+
+parameters:
+  - name: version
+    type: string
+    default: 14.x
+
+steps:
+  - task: NodeTool@0
+    displayName: Use Node ${{ parameters.version }}
+    inputs:
+      versionSpec: ${{ parameters.version }}

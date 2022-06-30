@@ -1,0 +1,14 @@
+# Create ENV File
+
+parameters:
+  - name: envFileName
+    type: string
+
+steps:
+  - task: CmdLine@2
+    displayName: "Copy Environment Variables - ${{ parameters.envFileName }}"
+    inputs:
+      script: >
+        echo "Using ${{ parameters.envFileName }}"
+
+        cp ${{ parameters.envFileName }} .env
