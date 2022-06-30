@@ -60,4 +60,4 @@ jobs:
     displayName: Cache Yarn packages
   - script: yarn install --frozen-lockfile
   - script: cd ios && pod install
-  - script: cd ios && xcodebuild clean archive -workspace testCiCdReactNative.xcworkspace -scheme testCiCdReactNative -archivePath testCiCdReactNative.xcarchive CODE_SIGNING_ALLOWED=NO | xcpretty
+  - script: cd ios && xcodebuild clean archive -workspace Anime.xcworkspace -scheme Anime -archivePath Anime.xcarchive CODE_SIGNING_ALLOWED=NO | xcpretty
